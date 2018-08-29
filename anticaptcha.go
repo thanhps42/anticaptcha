@@ -16,13 +16,21 @@ var (
 
 type Client struct {
 	APIKey string
+	c      *http.Client
+}
+
+func NewClient(api string) *Client {
+	return &Client{
+		APIKey: api,
+		c:      &http.Client{Timeout: time.Minute},
+	}
 }
 
 // Method to create the task to process the recaptcha, returns the task_id
-func (c *Client) createTaskRecaptcha(websiteURL string, recaptchaKey string) (float64, error) {
+func (this *Client) createTaskRecaptcha(websiteURL string, recaptchaKey string) (float64, error) {
 	// Mount the data to be sent
 	body := map[string]interface{}{
-		"clientKey": c.APIKey,
+		"clientKey": this.APIKey,
 		"task": map[string]interface{}{
 			"type":       "NoCaptchaTaskProxyless",
 			"websiteURL": websiteURL,
@@ -37,7 +45,7 @@ func (c *Client) createTaskRecaptcha(websiteURL string, recaptchaKey string) (fl
 
 	// Make the request
 	u := baseURL.ResolveReference(&url.URL{Path: "/createTask"})
-	resp, err := http.Post(u.String(), "application/json", bytes.NewBuffer(b))
+	resp, err := this.c.Post(u.String(), "application/json", bytes.NewBuffer(b))
 	if err != nil {
 		return 0, err
 	}
@@ -45,16 +53,19 @@ func (c *Client) createTaskRecaptcha(websiteURL string, recaptchaKey string) (fl
 
 	// Decode response
 	responseBody := make(map[string]interface{})
-	json.NewDecoder(resp.Body).Decode(&responseBody)
+	err = json.NewDecoder(resp.Body).Decode(&responseBody)
+	if err != nil {
+		return 0, err
+	}
 	// TODO treat api errors and handle them properly
 	return responseBody["taskId"].(float64), nil
 }
 
 // Method to check the result of a given task, returns the json returned from the api
-func (c *Client) getTaskResult(taskID float64) (map[string]interface{}, error) {
+func (this *Client) getTaskResult(taskID float64) (map[string]interface{}, error) {
 	// Mount the data to be sent
 	body := map[string]interface{}{
-		"clientKey": c.APIKey,
+		"clientKey": this.APIKey,
 		"taskId":    taskID,
 	}
 	b, err := json.Marshal(body)
@@ -64,7 +75,7 @@ func (c *Client) getTaskResult(taskID float64) (map[string]interface{}, error) {
 
 	// Make the request
 	u := baseURL.ResolveReference(&url.URL{Path: "/getTaskResult"})
-	resp, err := http.Post(u.String(), "application/json", bytes.NewBuffer(b))
+	resp, err := this.c.Post(u.String(), "application/json", bytes.NewBuffer(b))
 	if err != nil {
 		return nil, err
 	}
@@ -79,15 +90,15 @@ func (c *Client) getTaskResult(taskID float64) (map[string]interface{}, error) {
 // SendRecaptcha Method to encapsulate the processing of the recaptcha
 // Given a url and a key, it sends to the api and waits until
 // the processing is complete to return the evaluated key
-func (c *Client) SendRecaptcha(websiteURL string, recaptchaKey string) (string, error) {
+func (this *Client) SendRecaptcha(websiteURL string, recaptchaKey string) (string, error) {
 	// Create the task on anti-captcha api and get the task_id
-	taskID, err := c.createTaskRecaptcha(websiteURL, recaptchaKey)
+	taskID, err := this.createTaskRecaptcha(websiteURL, recaptchaKey)
 	if err != nil {
 		return "", err
 	}
 
 	// Check if the result is ready, if not loop until it is
-	response, err := c.getTaskResult(taskID)
+	response, err := this.getTaskResult(taskID)
 	if err != nil {
 		return "", err
 	}
@@ -95,7 +106,7 @@ func (c *Client) SendRecaptcha(websiteURL string, recaptchaKey string) (string, 
 		if response["status"] == "processing" {
 			log.Println("Result is not ready, waiting a few seconds to check again...")
 			time.Sleep(sendInterval)
-			response, err = c.getTaskResult(taskID)
+			response, err = this.getTaskResult(taskID)
 			if err != nil {
 				return "", err
 			}
@@ -108,10 +119,10 @@ func (c *Client) SendRecaptcha(websiteURL string, recaptchaKey string) (string, 
 }
 
 // Method to create the task to process the image captcha, returns the task_id
-func (c *Client) createTaskImage(imgString string) (float64, error) {
+func (this *Client) createTaskImage(imgString string) (float64, error) {
 	// Mount the data to be sent
 	body := map[string]interface{}{
-		"clientKey": c.APIKey,
+		"clientKey": this.APIKey,
 		"task": map[string]interface{}{
 			"type": "ImageToTextTask",
 			"body": imgString,
@@ -125,7 +136,7 @@ func (c *Client) createTaskImage(imgString string) (float64, error) {
 
 	// Make the request
 	u := baseURL.ResolveReference(&url.URL{Path: "/createTask"})
-	resp, err := http.Post(u.String(), "application/json", bytes.NewBuffer(b))
+	resp, err := this.c.Post(u.String(), "application/json", bytes.NewBuffer(b))
 	if err != nil {
 		return 0, err
 	}
@@ -133,7 +144,9 @@ func (c *Client) createTaskImage(imgString string) (float64, error) {
 
 	// Decode response
 	responseBody := make(map[string]interface{})
-	json.NewDecoder(resp.Body).Decode(&responseBody)
+	if err = json.NewDecoder(resp.Body).Decode(&responseBody); err != nil {
+		return 0, err
+	}
 	// TODO treat api errors and handle them properly
 	return responseBody["taskId"].(float64), nil
 }
@@ -141,15 +154,15 @@ func (c *Client) createTaskImage(imgString string) (float64, error) {
 // SendImage Method to encapsulate the processing of the image captcha
 // Given a base64 string from the image, it sends to the api and waits until
 // the processing is complete to return the evaluated key
-func (c *Client) SendImage(imgString string) (string, error) {
+func (this *Client) SendImage(imgString string) (string, error) {
 	// Create the task on anti-captcha api and get the task_id
-	taskID, err := c.createTaskImage(imgString)
+	taskID, err := this.createTaskImage(imgString)
 	if err != nil {
 		return "", err
 	}
 
 	// Check if the result is ready, if not loop until it is
-	response, err := c.getTaskResult(taskID)
+	response, err := this.getTaskResult(taskID)
 	if err != nil {
 		return "", err
 	}
@@ -157,7 +170,7 @@ func (c *Client) SendImage(imgString string) (string, error) {
 		if response["status"] == "processing" {
 			log.Println("Result is not ready, waiting a few seconds to check again...")
 			time.Sleep(sendInterval)
-			response, err = c.getTaskResult(taskID)
+			response, err = this.getTaskResult(taskID)
 			if err != nil {
 				return "", err
 			}
