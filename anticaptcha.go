@@ -3,7 +3,7 @@ package anticaptcha
 import (
 	"bytes"
 	"encoding/json"
-	"log"
+	"github.com/pkg/errors"
 	"net/http"
 	"net/url"
 	"time"
@@ -57,8 +57,23 @@ func (this *Client) createTaskRecaptcha(websiteURL string, recaptchaKey string) 
 	if err != nil {
 		return 0, err
 	}
-	// TODO treat api errors and handle them properly
-	return responseBody["taskId"].(float64), nil
+
+	taskId, ok := responseBody["taskId"]
+	if ok {
+		return taskId.(float64), nil
+	}
+
+	_, ok = responseBody["errorId"]
+	if !ok {
+		return 0, errors.New("anti-captcha: unknown response")
+	}
+
+	errorDescription, ok := responseBody["errorDescription"]
+	if !ok {
+		return 0, errors.New("anti-captcha: unknown error")
+	}
+
+	return 0, errors.New(errorDescription.(string))
 }
 
 // Method to check the result of a given task, returns the json returned from the api
@@ -104,14 +119,14 @@ func (this *Client) SendRecaptcha(websiteURL string, recaptchaKey string) (strin
 	}
 	for {
 		if response["status"] == "processing" {
-			log.Println("Result is not ready, waiting a few seconds to check again...")
+			//log.Println("Result is not ready, waiting a few seconds to check again...")
 			time.Sleep(sendInterval)
 			response, err = this.getTaskResult(taskID)
 			if err != nil {
 				return "", err
 			}
 		} else {
-			log.Println("Result is ready.")
+			//log.Println("Result is ready.")
 			break
 		}
 	}
@@ -168,14 +183,14 @@ func (this *Client) SendImage(imgString string) (string, error) {
 	}
 	for {
 		if response["status"] == "processing" {
-			log.Println("Result is not ready, waiting a few seconds to check again...")
+			//log.Println("Result is not ready, waiting a few seconds to check again...")
 			time.Sleep(sendInterval)
 			response, err = this.getTaskResult(taskID)
 			if err != nil {
 				return "", err
 			}
 		} else {
-			log.Println("Result is ready.")
+			//log.Println("Result is ready.")
 			break
 		}
 	}
