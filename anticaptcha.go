@@ -162,8 +162,20 @@ func (this *Client) createTaskImage(imgString string) (float64, error) {
 	if err = json.NewDecoder(resp.Body).Decode(&responseBody); err != nil {
 		return 0, err
 	}
-	// TODO treat api errors and handle them properly
-	return responseBody["taskId"].(float64), nil
+
+	val, ok := responseBody["taskId"]
+	if !ok || val == nil {
+		//fmt.Printf("%+v\n", responseBody)
+		return 0, errors.New("anticaptcha error")
+	}
+
+	switch val.(type) {
+	case float64:
+		return responseBody["taskId"].(float64), nil
+	default:
+		//fmt.Printf("%+v\n", responseBody)
+		return 0, errors.New("anticaptcha error")
+	}
 }
 
 // SendImage Method to encapsulate the processing of the image captcha
