@@ -26,6 +26,13 @@ func NewClient(api string) *Client {
 	}
 }
 
+func (this *Client) UseDebug() {
+	proxyURL, _ := url.Parse("http://localhost:8888")
+	this.c.Transport = &http.Transport{
+		Proxy: http.ProxyURL(proxyURL),
+	}
+}
+
 // Method to create the task to process the recaptcha, returns the task_id
 func (this *Client) createTaskRecaptcha(websiteURL string, recaptchaKey string) (float64, error) {
 	// Mount the data to be sent
