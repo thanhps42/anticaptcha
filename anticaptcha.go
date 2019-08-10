@@ -213,5 +213,10 @@ func (this *Client) SendImage(imgString string) (string, error) {
 			break
 		}
 	}
+
+	if response["solution"] == nil {
+		return "", errors.New("anticaptcha error")
+	}
+
 	return response["solution"].(map[string]interface{})["text"].(string), nil
 }
