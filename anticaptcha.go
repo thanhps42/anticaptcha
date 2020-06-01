@@ -137,6 +137,10 @@ func (this *Client) SendRecaptcha(websiteURL string, recaptchaKey string) (strin
 			break
 		}
 	}
+
+	if response["solution"] == nil {
+		return "", errors.New("solution is null")
+	}
 	return response["solution"].(map[string]interface{})["gRecaptchaResponse"].(string), nil
 }
 
